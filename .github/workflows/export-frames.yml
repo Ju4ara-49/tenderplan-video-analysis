@@ -1,0 +1,21 @@
+name: Export TenderPlan frames
+
+on:
+  push:
+    paths:
+      - "frame_*.jpg"
+      - ".github/workflows/export-frames.yml"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack frames
+        run: zip -q tenderplan-frames.zip frame_*.jpg
+      - name: Upload frames artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenderplan-frames
+          path: tenderplan-frames.zip
+          retention-days: 7
