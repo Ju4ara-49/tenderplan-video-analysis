@@ -3,9 +3,8 @@ name: Analyze TenderPlan frames
 on:
   push:
     paths:
-      - "frame_*.jpg"
+      - "frames/*.jpg"
       - ".github/workflows/analyze-frames.yml"
-      - ".github/workflows/export-frames.yml"
   workflow_dispatch:
 
 permissions:
@@ -16,6 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify frames
+        run: |
+          set -euo pipefail
+          count=$(find frames -maxdepth 1 -type f -name 'frame_*.jpg' | wc -l)
+          echo "Frames found: $count"
+          test "$count" -eq 57
 
       - name: Install OCR and image tools
         run: |
@@ -31,48 +37,39 @@ jobs:
           import glob, os, subprocess
           from PIL import Image, ImageStat
           import cv2
-
           rows = []
-          for path in sorted(glob.glob("frame_*.jpg")):
-              name = os.path.basename(path)
-              stem = os.path.splitext(name)[0]
-              img = Image.open(path).convert("RGB")
-              w, h = img.size
-              stat = ImageStat.Stat(img)
-              mean = [round(x, 1) for x in stat.mean]
-              tsv = f"analysis/ocr/{stem}.tsv"
-              subprocess.run(["tesseract", path, f"analysis/ocr/{stem}", "-l", "rus+eng", "--psm", "11", "tsv"], check=True, stdout=subprocess.DEVNULL)
-              words = []
-              with open(tsv, encoding="utf-8") as f:
-                  header = f.readline().rstrip("\n").split("\t")
-                  idx = {k:i for i,k in enumerate(header)}
+          for path in sorted(glob.glob("frames/frame_*.jpg")):
+              name = os.path.basename(path); stem = os.path.splitext(name)[0]
+              img = Image.open(path).convert("RGB"); w,h = img.size
+              mean = [round(x,1) for x in ImageStat.Stat(img).mean]
+              base = f"analysis/ocr/{stem}"
+              subprocess.run(["tesseract",path,base,"-l","rus+eng","--psm","11","tsv"],check=True,stdout=subprocess.DEVNULL)
+              words=[]
+              with open(base+".tsv",encoding="utf-8") as f:
+                  header=f.readline().rstrip("\n").split("\t"); idx={k:i for i,k in enumerate(header)}
                   for line in f:
-                      p = line.rstrip("\n").split("\t")
-                      if len(p) <= idx["text"]: continue
-                      text = p[idx["text"]].strip()
-                      try: conf = float(p[idx["conf"]])
-                      except: conf = -1
-                      if text and conf >= 20:
+                      p=line.rstrip("\n").split("\t")
+                      if len(p)<=idx["text"]: continue
+                      text=p[idx["text"]].strip()
+                      try: conf=float(p[idx["conf"]])
+                      except: conf=-1
+                      if text and conf>=20:
                           words.append({"text":text,"conf":round(conf,1),"x":int(p[idx["left"]]),"y":int(p[idx["top"]]),"w":int(p[idx["width"]]),"h":int(p[idx["height"]])})
-              arr = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-              edges = cv2.Canny(arr, 50, 150)
-              lines = cv2.HoughLinesP(edges, 1, 3.14159265/180, threshold=100, minLineLength=max(80, w//8), maxLineGap=10)
-              horiz = vert = 0
+              arr=cv2.imread(path,cv2.IMREAD_GRAYSCALE); edges=cv2.Canny(arr,50,150)
+              lines=cv2.HoughLinesP(edges,1,3.14159265/180,threshold=100,minLineLength=max(80,w//8),maxLineGap=10)
+              horiz=vert=0
               if lines is not None:
                   for x1,y1,x2,y2 in lines[:,0]:
-                      dx, dy = abs(x2-x1), abs(y2-y1)
-                      if dx > 4*max(1,dy): horiz += 1
-                      elif dy > 4*max(1,dx): vert += 1
+                      dx,dy=abs(x2-x1),abs(y2-y1)
+                      if dx>4*max(1,dy): horiz+=1
+                      elif dy>4*max(1,dx): vert+=1
               rows.append((name,w,h,mean,horiz,vert," ".join(x["text"] for x in words),words))
-
           with open("analysis/UX_RECONSTRUCTION.md","w",encoding="utf-8") as out:
-              out.write("# TenderPlan UX reconstruction from repository frames\n\n")
-              out.write("Evidence extraction from the 57 JPG frames. OCR coordinates are source-image pixels.\n\n")
+              out.write("# TenderPlan UX reconstruction from 57 repository frames\n\n")
+              out.write("Evidence extraction from the actual JPG frames. OCR coordinates are source-image pixels.\n\n")
               out.write(f"Frames analyzed: {len(rows)}\n\n")
               for name,w,h,mean,horiz,vert,text_joined,words in rows:
-                  out.write(f"## {name}\n")
-                  out.write(f"- Size: {w}x{h}\n- Mean RGB: {mean}\n- Strong horizontal/vertical line signals: {horiz}/{vert}\n- OCR words: {len(words)}\n- OCR text: {text_joined}\n")
-                  out.write("- OCR boxes:\n")
+                  out.write(f"## {name}\n- Size: {w}x{h}\n- Mean RGB: {mean}\n- Strong horizontal/vertical line signals: {horiz}/{vert}\n- OCR words: {len(words)}\n- OCR text: {text_joined}\n- OCR boxes:\n")
                   for x in words:
                       out.write(f"  - {x['text']} conf={x['conf']} box=({x['x']},{x['y']},{x['w']},{x['h']})\n")
                   out.write("\n")
