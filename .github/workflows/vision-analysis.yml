@@ -45,12 +45,12 @@ jobs:
 
       - name: Pull vision model
         env:
-          MODEL: ${{ inputs.model }}
+          MODEL: ${{ inputs.model || 'qwen2.5vl:3b' }}
         run: ollama pull "$MODEL"
 
       - name: Describe frames with vision model
         env:
-          MODEL: ${{ inputs.model }}
+          MODEL: ${{ inputs.model || 'qwen2.5vl:3b' }}
           MAX_FRAMES: ${{ inputs.max_frames }}
         run: |
           python3 - <<'PY'
