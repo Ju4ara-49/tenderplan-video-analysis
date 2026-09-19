@@ -17,7 +17,7 @@ on:
         default: "57"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   vision:
@@ -126,6 +126,18 @@ jobs:
               encoding="utf-8"
           )
           PY
+
+      - name: Commit visual descriptions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analysis/VISION_FRAME_DESCRIPTIONS.md analysis/VISION_FRAME_DESCRIPTIONS.json
+          if git diff --cached --quiet; then
+            echo "No visual description changes"
+          else
+            git commit -m "Generate TenderPlan visual frame descriptions"
+            git push
+          fi
 
       - name: Upload visual analysis
         uses: actions/upload-artifact@v4
